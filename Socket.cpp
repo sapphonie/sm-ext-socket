@@ -58,8 +58,11 @@ Socket<SocketType>::~Socket() {
 	}
 
 	// wait for all callbacks to terminate
-	//boost::unique_lock<boost::shared_mutex> l(handlerMutex);
-	handlerMutex.lock();
+	// Pending async handlers hold shared locks until they run. If the io_service thread
+	// does not run them (seen at server shutdown), a plain lock() blocks forever.
+	if (!handlerMutex.try_lock_for(boost::chrono::seconds(2))) {
+		g_pSM->LogError(myself, "Socket destroyed with pending callbacks after a 2 second wait");
+	}
 
 	boost::mutex::scoped_lock socketLock(socketMutex);
 
